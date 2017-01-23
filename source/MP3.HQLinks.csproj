@@ -7,7 +7,7 @@
     <ProjectGuid>{D37155CC-07C9-422E-A55D-1F1948F4246C}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>MP3.HQLinks</RootNamespace>
+    <RootNamespace>net.vieapps.MP3.HQLinks</RootNamespace>
     <AssemblyName>MP3.HQLinks</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -35,14 +35,14 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
-    <StartupObject>MP3.HQLinks.Program</StartupObject>
+    <StartupObject>net.vieapps.MP3.HQLinks.Program</StartupObject>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>cd-player.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\VIE Portal NG\3. Deliverables\.NET v4.6\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\VIE Portal NG\3. Deliverables\.NET v4.6\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

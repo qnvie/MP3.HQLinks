@@ -1,4 +1,4 @@
-﻿namespace MP3.HQLinks
+﻿namespace net.vieapps.MP3.HQLinks
 {
 	partial class MainForm
 	{
@@ -204,7 +204,7 @@
 			this.MaximizeBox = false;
 			this.Name = "MainForm";
 			this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-			this.Text = "MP3 HQ Links - Quynh Nguyen (Mr.)";
+			this.Text = "MP3 HQ Links - Quynh Nguyen (Mr.) - VIEApps.net";
 			this.Shown += new System.EventHandler(this.MainForm_Shown);
 			this.ResumeLayout(false);
 			this.PerformLayout();

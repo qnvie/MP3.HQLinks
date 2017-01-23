@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 #endregion
 
-namespace MP3.HQLinks
+namespace net.vieapps.MP3.HQLinks
 {
 	public partial class MainForm : Form
 	{
@@ -54,9 +54,11 @@ namespace MP3.HQLinks
 		{
 			string msg = "MP3.HQLinks là công cụ phân tích và download nhạc chất lượng cao trực tiếp từ Zing MP3 mà không cần tài khoản VIP."
 									+ "\r\n\r\n"
-									+ "Tác giả: Quỳnh Nguyễn (Mr.)"
+									+ "Tác giả: Quỳnh Nguyễn (Mr.) - VIEApps.net"
 									+ "\r\n"
-									+ "- Web Blog: http://quynhnguyen.chungta.com"
+									+ "- Website: http://vieapps.net"
+									+ "\r\n"
+									+ "- Blog: http://quynhnguyen.chungta.com"
 									+ "\r\n"
 									+ "- Source Code: https://github.com/qnvie/MP3.HQLinks"
 									+ "\r\n\r\n"

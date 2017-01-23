@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Windows.Forms;
 
-namespace MP3.HQLinks
+namespace net.vieapps.MP3.HQLinks
 {
 	internal static class Program
 	{

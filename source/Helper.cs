@@ -21,7 +21,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 #endregion
 
-namespace MP3.HQLinks
+namespace net.vieapps.MP3.HQLinks
 {
 
 	internal static class Helper
