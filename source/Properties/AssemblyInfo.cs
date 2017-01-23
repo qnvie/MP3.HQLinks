@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("Stable")]
 [assembly: AssemblyCompany("VIEApps.net")]
 [assembly: AssemblyProduct("MP3.HQLinks")]
-[assembly: AssemblyCopyright("Copyright ©  2015 - 2017 Quynh Nguyen (Mr.)")]
+[assembly: AssemblyCopyright("Copyright ©  2015 - 2017 VIEApps - Quynh Nguyen (Mr.)")]
 [assembly: AssemblyTrademark("VIEApps")]
 [assembly: AssemblyCulture("")]
 
