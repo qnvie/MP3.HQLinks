@@ -8,15 +8,17 @@ using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Linq;
 using System.Text;
-using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Net.Security;
 using System.Web;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
+using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 #endregion
@@ -47,7 +49,7 @@ namespace net.vieapps.MP3.HQLinks
 					proxy = new WebProxy(proxyHost, proxyPort);
 				else
 				{
-					Uri proxyAddress = new Uri("http://" + proxyHost + ":" + proxyPort.ToString());
+					var proxyAddress = new Uri("http://" + proxyHost + ":" + proxyPort.ToString());
 					proxy = new WebProxy(proxyAddress, true, proxyBypassList);
 				}
 				if (!String.IsNullOrEmpty(proxyUsername) && !String.IsNullOrEmpty(proxyUserPassword))
@@ -56,54 +58,84 @@ namespace net.vieapps.MP3.HQLinks
 			return proxy;
 		}
 
-		internal static async Task<HttpWebResponse> GetWebResponseAsync(string method, string uri, Dictionary<string, string> headers, Cookie[] cookies, string body, string contentType, int timeout, string userAgent, CredentialCache credential, WebProxy proxy)
+		public static async Task<HttpWebResponse> GetResponseAsync(this HttpWebRequest httpRequest, CancellationToken ct)
+		{
+			using (ct.Register(() => httpRequest.Abort(), useSynchronizationContext: false))
+			{
+				try
+				{
+					return await httpRequest.GetResponseAsync() as HttpWebResponse;
+				}
+				catch (WebException ex)
+				{
+					if (ct.IsCancellationRequested)
+						throw new OperationCanceledException(ex.Message, ex, ct);
+					else
+						throw ex;
+				}
+				catch (Exception)
+				{
+					throw;
+				}
+			}
+		}
+
+		internal static async Task<HttpWebResponse> GetWebResponseAsync(string method, string uri, Dictionary<string, string> headers = null, Cookie[] cookies = null, string body = null, string contentType = null, int timeout = 90, string userAgent = null, CredentialCache credential = null, WebProxy proxy = null, CancellationToken ct = default(CancellationToken))
 		{
 			// get the request object to handle on the remote resource
-			HttpWebRequest webRequest = WebRequest.Create(uri) as HttpWebRequest;
+			var request = WebRequest.Create(uri) as HttpWebRequest;
 
 			// set the properties
-			webRequest.Method = String.IsNullOrEmpty(method) ? "GET" : method.ToUpper();
-			webRequest.Timeout = timeout * 1000;                                    // milliseconds to seconds
-			webRequest.ServicePoint.Expect100Continue = false;
-			webRequest.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
-			webRequest.UserAgent = String.IsNullOrEmpty(userAgent) ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537 (KHTML, like Gecko) Chrome/52 Safari/537 VIEPortalNG/10" : userAgent;
+			request.Method = String.IsNullOrEmpty(method)
+				? "GET"
+				: method.ToUpper();
+			request.Timeout = timeout * 1000;
+			request.ServicePoint.Expect100Continue = false;
+			request.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+			request.UserAgent = String.IsNullOrEmpty(userAgent)
+				? "Mozilla/5.0 (iPhone; CPU iPhone OS 8_3 like Mac OS X; en-us) AppleWebKit/600.1.4 (KHTML, like Gecko) Version/8.0 Mobile/12F70 Safari/600.1.4"
+				: userAgent;
 
 			// headers
 			if (headers != null)
-				foreach (KeyValuePair<string, string> header in headers)
+				foreach (var header in headers)
 					if (!header.Key.Equals("Accept-Encoding"))
-						webRequest.Headers.Add(header.Key, header.Value);
+						request.Headers.Add(header.Key, header.Value);
 
 			// cookies
-			if (cookies != null && cookies.Length > 0 && webRequest.SupportsCookieContainer)
-				foreach (Cookie cookie in cookies)
-					webRequest.CookieContainer.Add(cookie);
+			if (cookies != null && cookies.Length > 0 && request.SupportsCookieContainer)
+			{
+				if (request.CookieContainer == null)
+					request.CookieContainer = new CookieContainer();
+				foreach (var cookie in cookies)
+					request.CookieContainer.Add(cookie);
+			}
 
 			// compression
-			webRequest.Headers.Add("Accept-Encoding", "deflate,gzip");
-			webRequest.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip;
+			request.Headers.Add("Accept-Encoding", "deflate,gzip");
+			request.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip;
 
 			// credential
 			if (credential != null)
 			{
-				webRequest.Credentials = credential;
-				webRequest.PreAuthenticate = true;
+				request.Credentials = credential;
+				request.PreAuthenticate = true;
 			}
 
 			// proxy
 			if (proxy != null)
-				webRequest.Proxy = proxy;
+				request.Proxy = proxy;
 
 			// data to post/put
 			if ((method.Equals("POST") || method.Equals("PUT")) && !String.IsNullOrEmpty(body))
 			{
 				if (!String.IsNullOrEmpty(contentType))
-					webRequest.ContentType = contentType;
+					request.ContentType = contentType;
 
-				using (StreamWriter requestWriter = new StreamWriter(await webRequest.GetRequestStreamAsync()))
+				using (var writer = new StreamWriter(await request.GetRequestStreamAsync()))
 				{
-					await requestWriter.WriteAsync(body);
-					requestWriter.Close();
+					await writer.WriteAsync(body);
+					writer.Close();
 				}
 			}
 
@@ -113,9 +145,9 @@ namespace net.vieapps.MP3.HQLinks
 			// make request and return response stream
 			try
 			{
-				return await webRequest.GetResponseAsync() as HttpWebResponse;
+				return await request.GetResponseAsync(ct);
 			}
-			catch (System.Net.Sockets.SocketException ex)
+			catch (SocketException ex)
 			{
 				if (ex.Message.Contains("did not properly respond after a period of time"))
 					throw new ConnectionTimeoutException(ex.InnerException);
@@ -127,9 +159,9 @@ namespace net.vieapps.MP3.HQLinks
 				string responseBody = "";
 				if (ex.Status.Equals(WebExceptionStatus.ProtocolError))
 				{
-					using (Stream stream = (ex.Response as HttpWebResponse).GetResponseStream())
+					using (var stream = (ex.Response as HttpWebResponse).GetResponseStream())
 					{
-						using (StreamReader reader = new StreamReader(stream, true))
+						using (var reader = new StreamReader(stream, true))
 						{
 							responseBody = await reader.ReadToEndAsync();
 						}
@@ -143,11 +175,11 @@ namespace net.vieapps.MP3.HQLinks
 			}
 			finally
 			{
-				webRequest = null;
+				request = null;
 			}
 		}
 
-		internal static async Task<HttpWebResponse> GetWebResponseAsync(string method, string uri, Dictionary<string, string> headers, string body, string contentType, int timeout, string userAgent, string credentialAccount, string credentialPassword, bool useSecureProtocol, SecurityProtocolType secureProtocol, WebProxy proxy)
+		internal static async Task<HttpWebResponse> GetWebResponseAsync(string method, string uri, Dictionary<string, string> headers, Cookie[] cookies, string body, string contentType, int timeout, string userAgent, string credentialAccount, string credentialPassword, bool useSecureProtocol, SecurityProtocolType secureProtocol, WebProxy proxy = null, CancellationToken ct = default(CancellationToken))
 		{
 			// credential
 			CredentialCache credential = null;
@@ -155,38 +187,25 @@ namespace net.vieapps.MP3.HQLinks
 				credential = Helper.GetWebCredential(uri, credentialAccount, credentialPassword, useSecureProtocol, secureProtocol);
 
 			// make request
-			return await Helper.GetWebResponseAsync(method, uri, headers, null, body, contentType, timeout, userAgent, credential, proxy);
+			return await Helper.GetWebResponseAsync(method, uri, headers, cookies, body, contentType, timeout, userAgent, credential, proxy, ct);
 		}
 
-		internal static async Task<Stream> GetWebResourceAsync(string method, string uri, Dictionary<string, string> headers, string body, string contentType, int timeout, string userAgent, string credentialAccount, string credentialPassword, bool useSecureProtocol, SecurityProtocolType secureProtocol, WebProxy proxy)
-		{
-			HttpWebResponse webResponse = await Helper.GetWebResponseAsync(method, uri, headers, body, contentType, timeout, userAgent, credentialAccount, credentialPassword, useSecureProtocol, secureProtocol, proxy);
-			return webResponse.GetResponseStream();
-		}
-
-		internal static async Task<Stream> GetWebResourceAsync(string uri, Dictionary<string, string> headers, int timeout, string userAgent, WebProxy proxy)
-		{
-			return await Helper.GetWebResourceAsync("GET", uri, headers, null, null, timeout, userAgent, null, null, true, SecurityProtocolType.Ssl3, proxy);
-		}
-
-		internal static async Task<Stream> GetWebResourceAsync(string uri, int timeout, WebProxy proxy)
-		{
-			return await Helper.GetWebResourceAsync(uri, null, timeout, null, proxy);
-		}
-
-		internal static async Task<string> GetWebPageAsync(string url, Dictionary<string, string> headers, int timeout, string userAgent, string credentialAccount, string credentialPassword, bool useSecureProtocol, SecurityProtocolType secureProtocol, WebProxy proxy)
+		internal static async Task<Tuple<string, List<Tuple<string, string>>>> GetWebPageAsync(string uri, Dictionary<string, string> headers = null, Cookie[] cookies = null, int timeout = 90, string userAgent = null, string credentialAccount = null, string credentialPassword = null, bool useSecureProtocol = false, SecurityProtocolType secureProtocol = SecurityProtocolType.Ssl3, WebProxy proxy = null, CancellationToken ct = default(CancellationToken))
 		{
 			// check uri
-			if (String.IsNullOrEmpty(url))
+			if (String.IsNullOrEmpty(uri))
 				return null;
 
 			// get stream of external resource as HTML
 			string html = "";
-			using (HttpWebResponse webResponse = await Helper.GetWebResponseAsync("GET", url, headers, null, "text/html", timeout, userAgent, credentialAccount, credentialPassword, useSecureProtocol, secureProtocol, proxy))
+			var responseHeaders = new List<Tuple<string, string>>();
+			using (var response = await Helper.GetWebResponseAsync("GET", uri, headers, cookies, null, null, timeout, userAgent, credentialAccount, credentialPassword, useSecureProtocol, secureProtocol, proxy, ct))
 			{
-				using (Stream stream = webResponse.GetResponseStream())
+				for (var index = 0; index < response.Headers.Count; index++)
+					responseHeaders.Add(new Tuple<string, string>(response.Headers.Keys[index], response.Headers.Get(index)));
+				using (var stream = response.GetResponseStream())
 				{
-					using (StreamReader reader = new StreamReader(stream, true))
+					using (var reader = new StreamReader(stream, true))
 					{
 						html = reader.ReadToEnd();
 					}
@@ -194,33 +213,18 @@ namespace net.vieapps.MP3.HQLinks
 			}
 
 			// decode and return HTML
-			return WebUtility.HtmlDecode(html);
+			return new Tuple<string, List<Tuple<string, string>>>(WebUtility.HtmlDecode(html), responseHeaders);
 		}
 
-		internal static async Task<string> GetWebPageAsync(string url, Dictionary<string, string> headers, int timeout, string proxyHost, int proxyPort, string proxyUsername, string proxyUserPassword, string[] proxyBypassList, string userAgent, string credentialAccount, string credentialPassword, bool useSecureProtocol, SecurityProtocolType secureProtocol)
+		internal static Task<Tuple<string, List<Tuple<string, string>>>> GetWebPageAsync(string uri, Cookie[] cookies, CancellationToken ct = default(CancellationToken))
 		{
-			WebProxy proxy = Helper.GetWebProxy(proxyHost, proxyPort, proxyUsername, proxyUserPassword, proxyBypassList);
-			return await Helper.GetWebPageAsync(url, headers, timeout, userAgent, credentialAccount, credentialPassword, useSecureProtocol, secureProtocol, proxy);
+			return Helper.GetWebPageAsync(uri, null, cookies, 90, null, null, null, false, SecurityProtocolType.Ssl3, null, ct);
 		}
 
-		internal static async Task<string> GetWebPageAsync(string url, Dictionary<string, string> headers, int timeout, string proxyHost, int proxyPort, string proxyUsername, string proxyUserPassword, string[] proxyBypassList, string userAgent)
+		internal static async Task<string> GetWebPageAsync(string uri, CancellationToken ct = default(CancellationToken))
 		{
-			return await Helper.GetWebPageAsync(url, headers, timeout, proxyHost, proxyPort, proxyUsername, proxyUserPassword, proxyBypassList, userAgent, null, null, true, SecurityProtocolType.Ssl3);
-		}
-
-		internal static async Task<string> GetWebPageAsync(string url, int timeout, string proxyHost, int proxyPort, string proxyUsername, string proxyUserPassword, string[] proxyBypassList, string userAgent)
-		{
-			return await Helper.GetWebPageAsync(url, null, timeout, proxyHost, proxyPort, proxyUsername, proxyUserPassword, proxyBypassList, userAgent);
-		}
-
-		internal static async Task<string> GetWebPageAsync(string url, int timeout, string proxyHost, int proxyPort, string proxyUsername, string proxyUserPassword, string[] proxyBypassList)
-		{
-			return await Helper.GetWebPageAsync(url, timeout, proxyHost, proxyPort, proxyUsername, proxyUserPassword, proxyBypassList, null);
-		}
-
-		internal static async Task<string> GetWebPageAsync(string url)
-		{
-			return await Helper.GetWebPageAsync(url, 90, null, 0, null, null, null);
+			var results = await Helper.GetWebPageAsync(uri, null, ct);
+			return results.Item1;
 		}
 		#endregion
 
@@ -404,11 +408,14 @@ namespace net.vieapps.MP3.HQLinks
 			if (String.IsNullOrEmpty(uri) || !uri.Contains("mp3.zing.vn"))
 				return null;
 
-			string albumHtml = await Helper.GetWebPageAsync(uri);
+			var response = await Helper.GetWebPageAsync(uri, null, ct);
+
+			var albumHtml = response.Item1;
 			if (albumHtml.Trim().Equals(""))
 				return null;
 
-			int start = -1, end = -1;
+			var start = -1;
+			var end = -1;
 			string title = null;
 
 			start = albumHtml.IndexOf("<h1 class=\"txt-primary");
@@ -428,23 +435,39 @@ namespace net.vieapps.MP3.HQLinks
 			if (end < 0)
 				return null;
 
-			string albumUri = albumHtml.Substring(start, end - start);
-			string albumJson = await Helper.GetWebPageAsync(albumUri);
+			var albumUri = albumHtml.Substring(start, end - start);
+
+			List<Cookie> cookies = new List<Cookie>();
+			response.Item2.Where(item => item.Item1.Equals("Set-Cookie")).ToList().ForEach(info =>
+			{
+				start = info.Item2.IndexOf("=");
+				end = info.Item2.IndexOf(";", start + 1);
+				cookies.Add(new Cookie()
+				{
+					Name = info.Item2.Substring(0, start),
+					Value = info.Item2.Substring(start + 1, end - start - 1),
+					Path = "/",
+					Domain = "mp3.zing.vn"					
+				});
+			});
+
+			response = await Helper.GetWebPageAsync(albumUri, cookies.Count > 0 ? cookies.ToArray() : null, ct);
+			var albumJson = response.Item1;
 			if (albumJson.Trim().Equals(""))
 				return null;
 
-			JObject json = JObject.Parse(albumJson);
-			JArray songs = json["data"] as JArray;
-			List<Task<JObject>> tasks = new List<Task<JObject>>();
-			foreach (JObject song in songs)
+			var json = JObject.Parse(albumJson);
+			var songs = json["data"] as JArray;
+			var tasks = new List<Task<JObject>>();
+			foreach (var song in songs)
 			{
-				string id = (song["id"] as JValue).Value.ToString();
+				var id = (song["id"] as JValue).Value.ToString();
 				tasks.Add(Helper.GetSongAsync(id, ct));
 			}
 			await Task.WhenAll(tasks);
 
 			songs = new JArray();
-			foreach (Task<JObject> task in tasks)
+			foreach (var task in tasks)
 				songs.Add(task.Result);
 
 			return new JObject() {
@@ -458,13 +481,14 @@ namespace net.vieapps.MP3.HQLinks
 		{
 			ct.ThrowIfCancellationRequested();
 
-			string uri = "http://api.mp3.zing.vn/api/mobile/song/getsonginfo?requestdata={\"id\":\"[id]\"}";
-			string jsonData = await Helper.GetWebPageAsync(uri.Replace("[id]", id).Replace("\"", "%22"));
+			var uri = "http://api.mp3.zing.vn/api/mobile/song/getsonginfo?requestdata={\"id\":\"[id]\"}";
+			var jsonData = await Helper.GetWebPageAsync(uri.Replace("[id]", id).Replace("\"", "%22"), ct);
 
-			JObject json = JObject.Parse(jsonData);
-			string title = (json["title"] as JValue).Value.ToString();
+			var json = JObject.Parse(jsonData);
+			var title = (json["title"] as JValue).Value.ToString();
 
-			json = json["source"] as JObject;
+			json = json["link_download"] as JObject;
+			//json = json["source"] as JObject;
 			uri = json["320"] != null ? (json["320"] as JValue).Value.ToString() : (json["128"] as JValue).Value.ToString();
 
 			return new JObject() {
@@ -483,22 +507,24 @@ namespace net.vieapps.MP3.HQLinks
 
 			Program.MainForm.UpdateLogs("- Bắt đầu download các bài hát/bản nhạc của album \"" + album + "\"\r\n");
 
-			string folderPath = @"Downloads\" + Helper.NormalizeFilename(album) + @"\";
-			DirectoryInfo folder = new DirectoryInfo(folderPath);
+			var folderPath = @"Downloads\" + Helper.NormalizeFilename(album) + @"\";
+			var folder = new DirectoryInfo(folderPath);
 			if (!folder.Exists)
 				folder.Create();
 
-			List<Task> tasks = new List<Task>();
-			int counter = 0;
-			foreach (JObject songInfo in songs)
+			var tasks = new List<Task>();
+			var counter = 0;
+			foreach (var songInfo in songs)
 			{
 				counter++;
-				string title = (songInfo["title"] as JValue).Value.ToString();
-				string uri = (songInfo["uri"] as JValue).Value.ToString();
-				string filename = (songInfo["filename"] as JValue).Value.ToString();
+				var title = (songInfo["title"] as JValue).Value.ToString();
+				var uri = (songInfo["uri"] as JValue).Value.ToString();
+				var filename = (songInfo["filename"] as JValue).Value.ToString();
 				if (filename.Equals(""))
 					filename = Helper.NormalizeFilename(album + " - " + title);
 				filename = counter.ToString("#00") + ". " + filename + (!filename.EndsWith("mp3") ? ".mp3" : "");
+
+				if (counter < 2)
 				tasks.Add(Helper.DownloadMP3FileAsync(title, uri, folderPath, filename, ct));
 			}
 
@@ -508,30 +534,36 @@ namespace net.vieapps.MP3.HQLinks
 
 		static async Task DownloadMP3FileAsync(string title, string uri, string folderPath, string filename, CancellationToken ct)
 		{
-			ct.ThrowIfCancellationRequested();
-
-			string downloadUri = await Helper.GetMP3FileUriAsync(uri);
-			using (Stream webStream = await Helper.GetWebResourceAsync(downloadUri, 600, null))
+			var downloadUri = await Helper.GetMP3FileUriAsync(uri, ct);
+			try
 			{
-				ct.ThrowIfCancellationRequested();
-				using (Stream fileStream = new FileStream(folderPath + filename, FileMode.Create, FileAccess.Write, FileShare.Read))
+				using (var response = await Helper.GetWebResponseAsync("GET", uri, null, null, null, null, 600, null, null, null, false, SecurityProtocolType.Ssl3, null, ct))
 				{
-					await webStream.CopyToAsync(fileStream);
+					using (var webStream = response.GetResponseStream())
+					{
+						using (var fileStream = new FileStream(folderPath + filename, FileMode.Create, FileAccess.Write, FileShare.Read))
+						{
+							await webStream.CopyToAsync(fileStream, 4096, ct);
+						}
+					}
 				}
+				Program.MainForm.UpdateLogs("- Download bài hát/bản nhạc \"" + title + "\" thành công\r\n");
 			}
-
-			ct.ThrowIfCancellationRequested();
-			Program.MainForm.UpdateLogs("- Download bài hát/bản nhạc \"" + title + "\" thành công\r\n");
+			catch (Exception ex)
+			{
+				Program.MainForm.UpdateLogs("- Error occurred while downloading \"" + title + "\": " + ex.Message + "\r\n");
+			}
 		}
 
-		static async Task<string> GetMP3FileUriAsync(string uri)
+		static async Task<string> GetMP3FileUriAsync(string uri, CancellationToken ct)
 		{
 			try
 			{
-				string userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 8_3 like Mac OS X; en-us) AppleWebKit/600.1.4 (KHTML, like Gecko) Version/8.0 Mobile/12F70 Safari/600.1.4";
-				using (HttpWebResponse webResponse = await Helper.GetWebResponseAsync("GET", uri, null, null, null, null, 45, userAgent, null, null))
+				using (var webResponse = await Helper.GetWebResponseAsync("GET", uri, null, null, null, null, 45, null, null, null, ct))
 				{
-					return webResponse != null && webResponse.ResponseUri != null ? webResponse.ResponseUri.ToString() : null;
+					return webResponse != null && webResponse.ResponseUri != null
+						? webResponse.ResponseUri.ToString()
+						: null;
 				}
 			}
 			catch

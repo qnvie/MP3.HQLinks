@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("MP3.HQLinks")]
-[assembly: AssemblyDescription("Hight quality MP3 files of Zing MP3")]
+[assembly: AssemblyDescription("Download hight quality MP3 files of Zing MP3")]
 [assembly: AssemblyConfiguration("Stable")]
 [assembly: AssemblyCompany("VIEApps.net")]
 [assembly: AssemblyProduct("MP3.HQLinks")]
@@ -32,4 +32,4 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers  by using the '*' as shown below:
 [assembly: AssemblyVersion("4.0")]
 [assembly: AssemblyFileVersion("4.0")]
-[assembly: AssemblyInformationalVersion("4.0.ddfs-2017.01.20")]
+[assembly: AssemblyInformationalVersion("4.0.ghrf-2017.06.25")]

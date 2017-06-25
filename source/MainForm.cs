@@ -60,7 +60,7 @@ namespace net.vieapps.MP3.HQLinks
 									+ "\r\n"
 									+ "- Blog: http://quynhnguyen.chungta.com"
 									+ "\r\n"
-									+ "- Source Code: https://github.com/qnvie/MP3.HQLinks"
+									+ "- Source Code: https://github.com/vieapps/MP3.HQLinks"
 									+ "\r\n\r\n"
 									+ "Version: 4 (Zing MP3 API v4)"
 									+ "\r\n";
@@ -215,7 +215,7 @@ namespace net.vieapps.MP3.HQLinks
 		static async Task Monitor()
 		{
 			// wait for complete
-			bool completed = false;
+			var completed = false;
 			while (!completed)
 			{
 				if (!MainForm.IsProcessing)
@@ -223,9 +223,9 @@ namespace net.vieapps.MP3.HQLinks
 
 				else
 				{
-					foreach (string uri in MainForm.Albums.Keys)
+					foreach (var uri in MainForm.Albums.Keys)
 					{
-						string result = MainForm.Albums[uri] as string;
+						var result = MainForm.Albums[uri] as string;
 						completed = !String.IsNullOrEmpty(result) && (result.Equals("Completed") || result.Equals("Error"));
 						if (!completed)
 							break;
@@ -252,7 +252,10 @@ namespace net.vieapps.MP3.HQLinks
 			try
 			{
 				// get information of the album
-				JObject albumInfo = albumUri.Contains("mp3.zing.vn") ? await Helper.GetAlbumAsync(albumUri, MainForm.CancelToken.Token) : null;
+				var albumInfo = albumUri.Contains("mp3.zing.vn")
+					? await Helper.GetAlbumAsync(albumUri, MainForm.CancelToken.Token)
+					: null;
+
 				if (albumInfo == null)
 					return;
 
@@ -261,20 +264,20 @@ namespace net.vieapps.MP3.HQLinks
 					return;
 
 				// prepare logs
-				string albumTitle = (albumInfo["title"] as JValue).Value.ToString();
-				string logs = "Đã phân tích xong thông tin địa chỉ \"" + albumUri
-										+ "\"\r\n"
-										+ "- Tên album: " + albumTitle
-										+ "\r\n";
+				var albumTitle = (albumInfo["title"] as JValue).Value.ToString();
+				var logs = "Đã phân tích xong thông tin địa chỉ \"" + albumUri
+					+ "\"\r\n"
+					+ "- Tên album: " + albumTitle
+					+ "\r\n";
 
 				// get songs
-				JArray songs = albumInfo["songs"] as JArray;
+				var songs = albumInfo["songs"] as JArray;
 				if (songs != null && songs.Count > 0)
 				{
 					logs += "- Tổng cộng có " + songs.Count.ToString() + " bài hát/bản nhạc:";
 					for (int songIndex = 0; songIndex < songs.Count; songIndex++)
 					{
-						JObject songInfo = songs[songIndex] as JObject;
+						var songInfo = songs[songIndex] as JObject;
 						logs += "\r\n\t+ " + (songIndex + 1).ToString("#00") + ". " + (songInfo["title"] as JValue).Value.ToString();
 					}
 					logs += "\r\n";
@@ -297,7 +300,7 @@ namespace net.vieapps.MP3.HQLinks
 				// download files
 				if (downoadFiles && songs != null && songs.Count > 0)
 				{
-					DirectoryInfo folder = new DirectoryInfo("Downloads");
+					var folder = new DirectoryInfo("Downloads");
 					if (!folder.Exists)
 						folder.Create();
 
@@ -322,7 +325,7 @@ namespace net.vieapps.MP3.HQLinks
 		{
 			if (base.InvokeRequired)
 			{
-				PrepareControlsDelegator method = new PrepareControlsDelegator(this.PrepareControls);
+				var method = new PrepareControlsDelegator(this.PrepareControls);
 				base.Invoke(method, new object[] { state });
 			}
 			else
@@ -357,7 +360,7 @@ namespace net.vieapps.MP3.HQLinks
 		{
 			if (base.InvokeRequired)
 			{
-				UpdateLogsDelegator method = new UpdateLogsDelegator(this.UpdateLogs);
+				var method = new UpdateLogsDelegator(this.UpdateLogs);
 				base.Invoke(method, new object[] { logs });
 			}
 			else
