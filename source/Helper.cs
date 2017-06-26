@@ -470,11 +470,18 @@ namespace net.vieapps.MP3.HQLinks
 			foreach (var task in tasks)
 				songs.Add(task.Result);
 
-			return new JObject() {
+			json = new JObject() {
 				{ "title", title },
 				{ "uri", uri },
-				{ "songs", songs }
+				{ "songs", songs },
+				{ "info",  new JObject()
+					{
+						{ "album", json },
+						{ "songs", songs }
+					}
+				}
 			};
+			return json;
 		}
 
 		static async Task<JObject> GetSongAsync(string id, CancellationToken ct)
@@ -487,15 +494,16 @@ namespace net.vieapps.MP3.HQLinks
 			var json = JObject.Parse(jsonData);
 			var title = (json["title"] as JValue).Value.ToString();
 
-			json = json["link_download"] as JObject;
-			//json = json["source"] as JObject;
+			//json = json["link_download"] as JObject;
+			json = json["source"] as JObject;
 			uri = json["320"] != null ? (json["320"] as JValue).Value.ToString() : (json["128"] as JValue).Value.ToString();
 
 			return new JObject() {
 				{ "id", id },
 				{ "title", title },
 				{ "uri", uri },
-				{ "filename", Helper.NormalizeFilename(title) + ".mp3" }
+				{ "filename", Helper.NormalizeFilename(title) + ".mp3" },
+				{ "info", json }
 			};
 		}
 		#endregion
@@ -524,7 +532,6 @@ namespace net.vieapps.MP3.HQLinks
 					filename = Helper.NormalizeFilename(album + " - " + title);
 				filename = counter.ToString("#00") + ". " + filename + (!filename.EndsWith("mp3") ? ".mp3" : "");
 
-				if (counter < 2)
 				tasks.Add(Helper.DownloadMP3FileAsync(title, uri, folderPath, filename, ct));
 			}
 
