@@ -190,6 +190,11 @@ namespace net.vieapps.MP3.HQLinks
 			return await Helper.GetWebResponseAsync(method, uri, headers, cookies, body, contentType, timeout, userAgent, credential, proxy, ct);
 		}
 
+		internal static Task<HttpWebResponse> GetWebResponseAsync(string method, string uri, int timeout, CancellationToken ct = default(CancellationToken))
+		{
+			return Helper.GetWebResponseAsync(method, uri, null, null, null, null, timeout, null, null, null, false, SecurityProtocolType.Ssl3, null, ct);
+		}
+
 		internal static async Task<Tuple<string, List<Tuple<string, string>>>> GetWebPageAsync(string uri, Dictionary<string, string> headers = null, Cookie[] cookies = null, int timeout = 90, string userAgent = null, string credentialAccount = null, string credentialPassword = null, bool useSecureProtocol = false, SecurityProtocolType secureProtocol = SecurityProtocolType.Ssl3, WebProxy proxy = null, CancellationToken ct = default(CancellationToken))
 		{
 			// check uri
@@ -470,18 +475,11 @@ namespace net.vieapps.MP3.HQLinks
 			foreach (var task in tasks)
 				songs.Add(task.Result);
 
-			json = new JObject() {
+			return new JObject() {
 				{ "title", title },
 				{ "uri", uri },
-				{ "songs", songs },
-				{ "info",  new JObject()
-					{
-						{ "album", json },
-						{ "songs", songs }
-					}
-				}
+				{ "songs", songs }
 			};
-			return json;
 		}
 
 		static async Task<JObject> GetSongAsync(string id, CancellationToken ct)
@@ -496,14 +494,13 @@ namespace net.vieapps.MP3.HQLinks
 
 			//json = json["link_download"] as JObject;
 			json = json["source"] as JObject;
-			uri = json["320"] != null ? (json["320"] as JValue).Value.ToString() : (json["128"] as JValue).Value.ToString();
+			//uri = json["320"] != null ? (json["320"] as JValue).Value.ToString() : (json["128"] as JValue).Value.ToString();
 
 			return new JObject() {
 				{ "id", id },
 				{ "title", title },
-				{ "uri", uri },
-				{ "filename", Helper.NormalizeFilename(title) + ".mp3" },
-				{ "info", json }
+				{ "uri", json },
+				{ "filename", Helper.NormalizeFilename(title) + ".mp3" }
 			};
 		}
 		#endregion
@@ -526,25 +523,29 @@ namespace net.vieapps.MP3.HQLinks
 			{
 				counter++;
 				var title = (songInfo["title"] as JValue).Value.ToString();
-				var uri = (songInfo["uri"] as JValue).Value.ToString();
+				var uri = songInfo["uri"] as JObject;
+				var uri128 = (uri["128"] as JValue).Value.ToString();
+				var uri320 = (uri["320"] as JValue).Value.ToString();
 				var filename = (songInfo["filename"] as JValue).Value.ToString();
 				if (filename.Equals(""))
 					filename = Helper.NormalizeFilename(album + " - " + title);
 				filename = counter.ToString("#00") + ". " + filename + (!filename.EndsWith("mp3") ? ".mp3" : "");
 
-				tasks.Add(Helper.DownloadMP3FileAsync(title, uri, folderPath, filename, ct));
+				//if (counter < 2)
+				tasks.Add(Helper.DownloadMP3FileAsync(title, uri128, uri320, folderPath, filename, ct));
 			}
 
 			await Task.WhenAll(tasks);
 			Program.MainForm.UpdateLogs("- Download các bài hát/bản nhạc của album \"" + album + "\" thành công\r\n");
 		}
 
-		static async Task DownloadMP3FileAsync(string title, string uri, string folderPath, string filename, CancellationToken ct)
+		static async Task DownloadMP3FileAsync(string title, string uri128, string uri320, string folderPath, string filename, CancellationToken ct)
 		{
-			var downloadUri = await Helper.GetMP3FileUriAsync(uri, ct);
+			await Task.Delay(321);
 			try
 			{
-				using (var response = await Helper.GetWebResponseAsync("GET", uri, null, null, null, null, 600, null, null, null, false, SecurityProtocolType.Ssl3, null, ct))
+				var downloadUri = await Helper.GetMP3FileUriAsync(uri320, ct);
+				using (var response = await Helper.GetWebResponseAsync("GET", downloadUri, 600, ct))
 				{
 					using (var webStream = response.GetResponseStream())
 					{
@@ -556,9 +557,27 @@ namespace net.vieapps.MP3.HQLinks
 				}
 				Program.MainForm.UpdateLogs("- Download bài hát/bản nhạc \"" + title + "\" thành công\r\n");
 			}
-			catch (Exception ex)
+			catch
 			{
-				Program.MainForm.UpdateLogs("- Error occurred while downloading \"" + title + "\": " + ex.Message + "\r\n");
+				try
+				{
+					var downloadUri = await Helper.GetMP3FileUriAsync(uri128, ct);
+					using (var response = await Helper.GetWebResponseAsync("GET", downloadUri, 600, ct))
+					{
+						using (var webStream = response.GetResponseStream())
+						{
+							using (var fileStream = new FileStream(folderPath + filename, FileMode.Create, FileAccess.Write, FileShare.Read))
+							{
+								await webStream.CopyToAsync(fileStream, 4096, ct);
+							}
+						}
+					}
+					Program.MainForm.UpdateLogs("- Download bài hát/bản nhạc \"" + title + "\" thành công\r\n");
+				}
+				catch (Exception ex)
+				{
+					Program.MainForm.UpdateLogs("- Error occurred while downloading \"" + title + "\": " + ex.Message + "\r\n-Stack:" + ex.StackTrace + "\r\n\r\n");
+				}
 			}
 		}
 

@@ -290,12 +290,13 @@ namespace net.vieapps.MP3.HQLinks
 				// update logs
 				Program.MainForm.UpdateLogs(logs);
 
+				/*
 				using (var stream = new FileStream(@"Downloads\" + Helper.NormalizeFilename(albumTitle) + @".json", FileMode.Create, FileAccess.Write, FileShare.Read))
 				{
 					var data = UTF8Encoding.UTF8.GetBytes(albumInfo.ToString(Formatting.Indented));
 					stream.Write(data, 0, data.Length);
 				}
-
+				*/
 
 				// add links into IDM
 				if (addLinksIntoIDM && songs != null && songs.Count > 0)
